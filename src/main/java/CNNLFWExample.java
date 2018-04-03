@@ -1,5 +1,4 @@
-import org.canova.image.loader.LFWLoader;
-import org.deeplearning4j.datasets.iterator.DataSetIterator;
+import org.datavec.image.loader.LFWLoader;
 import org.deeplearning4j.datasets.iterator.impl.LFWDataSetIterator;
 import org.deeplearning4j.eval.Evaluation;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
@@ -7,11 +6,11 @@ import org.deeplearning4j.nn.conf.GradientNormalization;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.Updater;
+import org.deeplearning4j.nn.conf.inputs.InputType;
 import org.deeplearning4j.nn.conf.layers.ConvolutionLayer;
 import org.deeplearning4j.nn.conf.layers.DenseLayer;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
 import org.deeplearning4j.nn.conf.layers.SubsamplingLayer;
-import org.deeplearning4j.nn.conf.layers.setup.ConvolutionLayerSetup;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.deeplearning4j.optimize.api.IterationListener;
@@ -19,6 +18,7 @@ import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.SplitTestAndTrain;
+import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,7 +71,7 @@ public class CNNLFWExample {
         List<INDArray> testLabels = new ArrayList<>();
 
         log.info("Load data....");
-        DataSetIterator lfw = new LFWDataSetIterator(batchSize, numSamples, new int[] {numRows, numColumns, nChannels}, outputNum, useSubset, false, new Random(seed));
+        DataSetIterator lfw = new LFWDataSetIterator(batchSize, numSamples, new int[] {numRows, numColumns, nChannels}, outputNum, useSubset, false, 0.1, new Random(seed));
 
         log.info("Build model....");
         MultiLayerConfiguration.Builder builder = new NeuralNetConfiguration.Builder()
@@ -86,7 +86,7 @@ public class CNNLFWExample {
                 .regularization(true)
                 .updater(Updater.ADAGRAD)
                 .useDropConnect(true)
-                .list(6)
+                .list()
                 .layer(0, new ConvolutionLayer.Builder(4, 4)
                         .name("cnn1")
                         .nIn(nChannels)
@@ -126,8 +126,9 @@ public class CNNLFWExample {
                         .nOut(outputNum)
                         .activation("softmax")
                         .build())
-                .backprop(true).pretrain(false);
-        new ConvolutionLayerSetup(builder,numRows,numColumns,nChannels);
+                .backprop(true)
+                .setInputType(InputType.convolutional(numRows, numColumns, nChannels))
+                .pretrain(false);
 
         MultiLayerNetwork model = new MultiLayerNetwork(builder.build());
         model.init();
