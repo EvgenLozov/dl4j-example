@@ -1,4 +1,5 @@
-import org.datavec.image.loader.LFWLoader;
+package com.example;
+
 import org.deeplearning4j.datasets.iterator.impl.LFWDataSetIterator;
 import org.deeplearning4j.eval.Evaluation;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
@@ -56,7 +57,7 @@ public class CNNLFWExample {
         final int numRows = 40;
         final int numColumns = 40;
         int nChannels = 3;
-        int outputNum = LFWLoader.NUM_LABELS;
+        int outputNum = 1;//LFWLoader.NUM_LABELS;
         int numSamples = 1000; // LFWLoader.NUM_IMAGES;
         boolean useSubset = false;
         int batchSize = 200;// numSamples/10;
@@ -71,7 +72,10 @@ public class CNNLFWExample {
         List<INDArray> testLabels = new ArrayList<>();
 
         log.info("Load data....");
-        DataSetIterator lfw = new LFWDataSetIterator(batchSize, numSamples, new int[] {numRows, numColumns, nChannels}, outputNum, useSubset, false, 0.1, new Random(seed));
+        DataSetIterator lfw = new LFWDataSetIterator(batchSize, numSamples, new int[] {numRows, numColumns, nChannels}, outputNum, true, true, 1, new Random(seed));
+//        DataSetIterator lfw = new LFWDataSetIterator(new int[] {numRows, numColumns, nChannels});
+
+
 
         log.info("Build model....");
         MultiLayerConfiguration.Builder builder = new NeuralNetConfiguration.Builder()
@@ -132,6 +136,8 @@ public class CNNLFWExample {
 
         MultiLayerNetwork model = new MultiLayerNetwork(builder.build());
         model.init();
+
+        model.feedForward().get(5);
 
         log.info("Train model....");
         model.setListeners(Collections.singletonList((IterationListener) new ScoreIterationListener(listenerFreq)));
