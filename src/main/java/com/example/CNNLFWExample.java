@@ -51,7 +51,7 @@ import java.util.Random;
 public class CNNLFWExample {
     private static final Logger log = LoggerFactory.getLogger(CNNLFWExample.class);
 
-    public static void main(String[] args) {
+    public  void main(String[] args) {
 
 
         final int numRows = 40;

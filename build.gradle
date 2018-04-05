@@ -2,6 +2,16 @@ group 'example'
 version '1.0-SNAPSHOT'
 
 apply plugin: 'java'
+apply plugin: 'spring-boot'
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:1.2.4.RELEASE")
+    }
+}
 
 sourceCompatibility = 1.8
 
@@ -15,8 +25,8 @@ dependencies {
     compile group: 'org.deeplearning4j', name: 'deeplearning4j-nlp', version: '0.9.1'
 
 
-    compile group: 'org.nd4j', name: 'nd4j-native-platform', version: '0.9.1'
-    //    compile group: 'org.nd4j', name: 'nd4j-cuda-8.0-platform', version: '0.9.1'
+//    compile group: 'org.nd4j', name: 'nd4j-native-platform', version: '0.9.1'
+        compile group: 'org.nd4j', name: 'nd4j-cuda-8.0-platform', version: '0.9.1'
     compile group: 'org.datavec', name: 'datavec-api', version: '0.9.1'
     compile group: 'org.deeplearning4j', name: 'deeplearning4j-parallel-wrapper_2.11', version: '0.9.1'
 
