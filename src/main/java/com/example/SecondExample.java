@@ -15,10 +15,7 @@ import org.deeplearning4j.datasets.datavec.RecordReaderDataSetIterator;
 import org.deeplearning4j.datasets.iterator.MultipleEpochsIterator;
 import org.deeplearning4j.eval.Evaluation;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
-import org.deeplearning4j.nn.conf.GradientNormalization;
-import org.deeplearning4j.nn.conf.LearningRatePolicy;
-import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
-import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
+import org.deeplearning4j.nn.conf.*;
 import org.deeplearning4j.nn.conf.distribution.Distribution;
 import org.deeplearning4j.nn.conf.distribution.GaussianDistribution;
 import org.deeplearning4j.nn.conf.distribution.NormalDistribution;
@@ -29,21 +26,30 @@ import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.deeplearning4j.optimize.api.IterationListener;
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
+import org.deeplearning4j.parallelism.ParallelWrapper;
 import org.deeplearning4j.ui.api.UIServer;
 import org.deeplearning4j.ui.stats.StatsListener;
 import org.deeplearning4j.ui.storage.InMemoryStatsStorage;
 import org.deeplearning4j.util.ModelSerializer;
+import org.nd4j.jita.conf.CudaEnvironment;
 import org.nd4j.linalg.activations.Activation;
+import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.util.DataTypeUtil;
 import org.nd4j.linalg.dataset.DataSet;
+import org.nd4j.linalg.dataset.api.iterator.CachingDataSetIterator;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
+import org.nd4j.linalg.dataset.api.iterator.cache.InMemoryDataSetCache;
 import org.nd4j.linalg.dataset.api.preprocessor.DataNormalization;
 import org.nd4j.linalg.dataset.api.preprocessor.ImagePreProcessingScaler;
+import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.learning.config.Nesterovs;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
@@ -55,22 +61,32 @@ public class SecondExample {
     protected static final Logger log = LoggerFactory.getLogger(SecondExample.class);
     protected static int height = 100;
     protected static int width = 100;
-    protected static int channels = 3;
-    protected static int batchSize = 20;
+    protected static int channels = 1;
+    protected static int batchSize = 2;
 
     protected static long seed = 42;
     protected static Random rng = new Random(seed);
     protected static int iterations = 1;
-    protected static int epochs = 50;
+    protected static int epochs = 200;
     protected static double splitTrainTest = 0.8;
-    protected static boolean save = false;
+    protected static boolean save = true;
 
-    protected static String modelType = "AlexNet"; // LeNet, AlexNet or Custom but you need to fill it out
+    protected static String modelType = "load"; // LeNet, AlexNet or Custom but you need to fill it out
     private int numLabels;
 
 
     public void run(String[] args) throws Exception {
-        System.setProperty("java.version","1.8");
+        DataTypeUtil.setDTypeForContext(DataBuffer.Type.HALF);
+        CudaEnvironment.getInstance().getConfiguration()
+                .setMaximumGridSize(2048)
+                .setMaximumBlockSize(512);
+
+        CudaEnvironment.getInstance().getConfiguration()
+                .setMaximumDeviceCacheableLength(1024 * 1024 * 1024L)
+                .setMaximumDeviceCache(6L * 1024 * 1024 * 1024L)
+                .setMaximumHostCacheableLength(1024 * 1024 * 1024L)
+                .setMaximumHostCache(6L * 1024 * 1024 * 1024L);
+
 
         log.info("Load data....");
         /**cd
@@ -80,7 +96,8 @@ public class SecondExample {
          *  - pathFilter = define additional file load filter to limit size and balance batch content
          **/
         ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
-        File mainPath = new File(System.getProperty("user.dir"), "src/main/resources/animals/");
+//        File mainPath = new File(System.getProperty("user.dir"), "src/main/resources/animals/");
+        File mainPath = new File("c:\\Users\\User\\face_15");
         FileSplit fileSplit = new FileSplit(mainPath, NativeImageLoader.ALLOWED_FORMATS, rng);
         int numExamples = toIntExact(fileSplit.length());
         numLabels = fileSplit.getRootDir().listFiles(File::isDirectory).length; //This only works if your root is clean: only label subdirs.
@@ -102,7 +119,7 @@ public class SecondExample {
         ImageTransform flipTransform2 = new FlipImageTransform(new Random(123));
         ImageTransform warpTransform = new WarpImageTransform(rng, 42);
 //        ImageTransform colorTransform = new ColorConversionTransform(new Random(seed), COLOR_BGR2YCrCb);
-        List<ImageTransform> transforms = Arrays.asList(new ImageTransform[]{flipTransform1, warpTransform, flipTransform2});
+        List<ImageTransform> transforms = new ArrayList<>();//Arrays.asList(new ImageTransform[]{flipTransform1, flipTransform2});
 
         /**
          * Data Setup -> normalization
@@ -126,6 +143,9 @@ public class SecondExample {
             case "custom":
                 network = customModel();
                 break;
+            case "load":
+                network = loadModel();
+                break;
             default:
                 throw new InvalidInputTypeException("Incorrect model provided.");
         }
@@ -142,6 +162,11 @@ public class SecondExample {
          *  - trainIter = uses MultipleEpochsIterator to ensure model runs through the data for all epochs
          **/
         ImageRecordReader recordReader = new ImageRecordReader(height, width, channels, labelMaker);
+
+        recordReader.setLabels(Arrays.asList(mainPath.list()));
+
+
+
         DataSetIterator dataIter;
         MultipleEpochsIterator trainIter;
 
@@ -152,7 +177,10 @@ public class SecondExample {
         dataIter = new RecordReaderDataSetIterator(recordReader, batchSize, 1, numLabels);
         scaler.fit(dataIter);
         dataIter.setPreProcessor(scaler);
+        dataIter = new CachingDataSetIterator(dataIter, new InMemoryDataSetCache());
         trainIter = new MultipleEpochsIterator(epochs, dataIter);
+
+
         network.fit(trainIter);
 
         // Train with transformations
@@ -190,6 +218,16 @@ public class SecondExample {
             ModelSerializer.writeModel(network, basePath + "model.bin", true);
         }
         log.info("****************Example finished********************");
+    }
+
+    private MultiLayerNetwork loadModel() {
+        String basePath = FilenameUtils.concat(System.getProperty("user.dir"), "src/main/resources/");
+
+        try {
+            return ModelSerializer.restoreMultiLayerNetwork(basePath + "model.bin");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private ConvolutionLayer convInit(String name, int in, int out, int[] kernel, int[] stride, int[] pad, double bias) {
@@ -293,15 +331,69 @@ public class SecondExample {
                 .setInputType(InputType.convolutional(height, width, channels))
                 .build();
 
+
         return new MultiLayerNetwork(conf);
 
     }
 
-    public static MultiLayerNetwork customModel() {
-        /**
-         * Use this method to build your own custom model.
-         **/
-        return null;
+    public MultiLayerNetwork customModel() {
+        MultiLayerConfiguration.Builder builder = new NeuralNetConfiguration.Builder()
+                .seed(seed)
+                .iterations(iterations)
+                .activation("relu")
+                .weightInit(WeightInit.XAVIER)
+                .gradientNormalization(GradientNormalization.RenormalizeL2PerLayer)
+                .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
+                .learningRate(0.001)
+                .momentum(0.9)
+                .regularization(true)
+                .updater(Updater.ADAGRAD)
+                .useDropConnect(true)
+                .list()
+                .layer(0, new ConvolutionLayer.Builder(4, 4)
+                        .name("cnn1")
+                        .nIn(channels)
+                        .stride(1, 1)
+                        .nOut(20)
+                        .build())
+                .layer(1, new SubsamplingLayer.Builder(SubsamplingLayer.PoolingType.MAX, new int[]{2, 2})
+                        .name("pool1")
+                        .build())
+                .layer(2, new ConvolutionLayer.Builder(3, 3)
+                        .name("cnn2")
+                        .stride(1,1)
+                        .nOut(40)
+                        .build())
+                .layer(3, new SubsamplingLayer.Builder(SubsamplingLayer.PoolingType.MAX, new int[]{2, 2})
+                        .name("pool2")
+                        .build())
+                .layer(2, new ConvolutionLayer.Builder(3, 3)
+                        .name("cnn3")
+                        .stride(1,1)
+                        .nOut(60)
+                        .build())
+                .layer(3, new SubsamplingLayer.Builder(SubsamplingLayer.PoolingType.MAX, new int[]{2, 2})
+                        .name("pool3")
+                        .build())
+                .layer(2, new ConvolutionLayer.Builder(2, 2)
+                        .name("cnn3")
+                        .stride(1,1)
+                        .nOut(80)
+                        .build())
+                .layer(4, new DenseLayer.Builder()
+                        .name("ffn1")
+                        .nOut(160)
+                        .dropOut(0.5)
+                        .build())
+                .layer(5, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
+                        .nOut(numLabels)
+                        .activation("softmax")
+                        .build())
+                .backprop(true)
+                .setInputType(InputType.convolutional(height, width, channels))
+                .pretrain(false);
+
+        return new MultiLayerNetwork(builder.build());
     }
 
     public static void main(String[] args) throws Exception {
