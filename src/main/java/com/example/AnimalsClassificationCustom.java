@@ -9,13 +9,15 @@ import org.datavec.image.loader.NativeImageLoader;
 import org.datavec.image.recordreader.ImageRecordReader;
 import org.datavec.image.transform.FlipImageTransform;
 import org.datavec.image.transform.ImageTransform;
+import org.datavec.image.transform.PipelineImageTransform;
 import org.datavec.image.transform.WarpImageTransform;
 import org.deeplearning4j.api.storage.StatsStorage;
 import org.deeplearning4j.datasets.datavec.RecordReaderDataSetIterator;
-import org.deeplearning4j.datasets.iterator.MultipleEpochsIterator;
 import org.deeplearning4j.eval.Evaluation;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
-import org.deeplearning4j.nn.conf.*;
+import org.deeplearning4j.nn.conf.GradientNormalization;
+import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
+import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.distribution.Distribution;
 import org.deeplearning4j.nn.conf.distribution.GaussianDistribution;
 import org.deeplearning4j.nn.conf.distribution.NormalDistribution;
@@ -24,70 +26,50 @@ import org.deeplearning4j.nn.conf.inputs.InvalidInputTypeException;
 import org.deeplearning4j.nn.conf.layers.*;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
-import org.deeplearning4j.optimize.api.IterationListener;
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
-import org.deeplearning4j.parallelism.ParallelWrapper;
 import org.deeplearning4j.ui.api.UIServer;
 import org.deeplearning4j.ui.stats.StatsListener;
 import org.deeplearning4j.ui.storage.InMemoryStatsStorage;
 import org.deeplearning4j.util.ModelSerializer;
-import org.nd4j.jita.conf.CudaEnvironment;
 import org.nd4j.linalg.activations.Activation;
-import org.nd4j.linalg.api.buffer.DataBuffer;
-import org.nd4j.linalg.api.buffer.util.DataTypeUtil;
 import org.nd4j.linalg.dataset.DataSet;
-import org.nd4j.linalg.dataset.api.iterator.CachingDataSetIterator;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
-import org.nd4j.linalg.dataset.api.iterator.cache.InMemoryDataSetCache;
 import org.nd4j.linalg.dataset.api.preprocessor.DataNormalization;
 import org.nd4j.linalg.dataset.api.preprocessor.ImagePreProcessingScaler;
-import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.learning.config.Adam;
 import org.nd4j.linalg.learning.config.Nesterovs;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
+import org.nd4j.linalg.primitives.Pair;
+import org.nd4j.linalg.schedule.ScheduleType;
+import org.nd4j.linalg.schedule.StepSchedule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
 import static java.lang.Math.toIntExact;
 
-public class SecondExample {
-
-    protected static final Logger log = LoggerFactory.getLogger(SecondExample.class);
+public class AnimalsClassificationCustom {
+    protected static final Logger log = LoggerFactory.getLogger(AnimalsClassificationCustom.class);
     protected static int height = 100;
     protected static int width = 100;
-    protected static int channels = 1;
-    protected static int batchSize = 2;
+    protected static int channels = 3;
+    protected static int batchSize = 20;
 
     protected static long seed = 42;
     protected static Random rng = new Random(seed);
-    protected static int iterations = 1;
-    protected static int epochs = 200;
+    protected static int epochs = 50;
     protected static double splitTrainTest = 0.8;
-    protected static boolean save = true;
+    protected static boolean save = false;
+    protected static int maxPathsPerLabel=18;
 
     protected static String modelType = "custom"; // LeNet, AlexNet or Custom but you need to fill it out
-    private int numLabels;
-
+    private static int numLabels;
 
     public void run(String[] args) throws Exception {
-        DataTypeUtil.setDTypeForContext(DataBuffer.Type.HALF);
-        CudaEnvironment.getInstance().getConfiguration()
-                .setMaximumGridSize(2048)
-                .setMaximumBlockSize(512);
-
-        CudaEnvironment.getInstance().getConfiguration()
-                .setMaximumDeviceCacheableLength(1024 * 1024 * 1024L)
-                .setMaximumDeviceCache(6L * 1024 * 1024 * 1024L)
-                .setMaximumHostCacheableLength(1024 * 1024 * 1024L)
-                .setMaximumHostCache(6L * 1024 * 1024 * 1024L);
-
 
         log.info("Load data....");
         /**cd
@@ -97,12 +79,11 @@ public class SecondExample {
          *  - pathFilter = define additional file load filter to limit size and balance batch content
          **/
         ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
-//        File mainPath = new File(System.getProperty("user.dir"), "src/main/resources/animals/");
-        File mainPath = new File("c:\\Users\\User\\face_large");
+        File mainPath = new File("c:\\Users\\User\\face_large\\");
         FileSplit fileSplit = new FileSplit(mainPath, NativeImageLoader.ALLOWED_FORMATS, rng);
         int numExamples = toIntExact(fileSplit.length());
-        numLabels = fileSplit.getRootDir().listFiles(file -> file.isDirectory() && file.list().length > 0).length; //This only works if your root is clean: only label subdirs.
-        BalancedPathFilter pathFilter = new BalancedPathFilter(rng, labelMaker, numExamples, numLabels, batchSize);
+        numLabels = fileSplit.getRootDir().listFiles(File::isDirectory).length; //This only works if your root is clean: only label subdirs.
+        BalancedPathFilter pathFilter = new BalancedPathFilter(rng, labelMaker, numExamples, numLabels, maxPathsPerLabel);
 
         /**
          * Data Setup -> train test split
@@ -119,9 +100,12 @@ public class SecondExample {
         ImageTransform flipTransform1 = new FlipImageTransform(rng);
         ImageTransform flipTransform2 = new FlipImageTransform(new Random(123));
         ImageTransform warpTransform = new WarpImageTransform(rng, 42);
-//        ImageTransform colorTransform = new ColorConversionTransform(new Random(seed), COLOR_BGR2YCrCb);
-        List<ImageTransform> transforms = new ArrayList<>();//Arrays.asList(new ImageTransform[]{flipTransform1, flipTransform2});
+        boolean shuffle = false;
+        List<Pair<ImageTransform,Double>> pipeline = Arrays.asList(new Pair<>(flipTransform1,0.9),
+                new Pair<>(flipTransform2,0.8),
+                new Pair<>(warpTransform,0.5));
 
+        ImageTransform transform = new PipelineImageTransform(pipeline,shuffle);
         /**
          * Data Setup -> normalization
          *  - how to normalize images and generate large dataset to train on
@@ -144,9 +128,6 @@ public class SecondExample {
             case "custom":
                 network = customModel();
                 break;
-            case "load":
-                network = loadModel();
-                break;
             default:
                 throw new InvalidInputTypeException("Incorrect model provided.");
         }
@@ -155,7 +136,7 @@ public class SecondExample {
         UIServer uiServer = UIServer.getInstance();
         StatsStorage statsStorage = new InMemoryStatsStorage();
         uiServer.attach(statsStorage);
-        network.setListeners(new StatsListener( statsStorage),new ScoreIterationListener(iterations));
+        network.setListeners(new StatsListener( statsStorage),new ScoreIterationListener(1));
         /**
          * Data Setup -> define how to load data into net:
          *  - recordReader = the reader that loads and converts image data pass in inputSplit to initialize
@@ -163,13 +144,9 @@ public class SecondExample {
          *  - trainIter = uses MultipleEpochsIterator to ensure model runs through the data for all epochs
          **/
         ImageRecordReader recordReader = new ImageRecoderReaderFixed(height, width, channels, labelMaker);
-
         recordReader.setLabels(Arrays.asList(mainPath.list()));
 
-
-
         DataSetIterator dataIter;
-        MultipleEpochsIterator trainIter;
 
 
         log.info("Train model....");
@@ -178,22 +155,14 @@ public class SecondExample {
         dataIter = new RecordReaderDataSetIterator(recordReader, batchSize, 1, numLabels);
         scaler.fit(dataIter);
         dataIter.setPreProcessor(scaler);
-        dataIter = new CachingDataSetIterator(dataIter, new InMemoryDataSetCache());
-        trainIter = new MultipleEpochsIterator(epochs, dataIter);
-
-
-        network.fit(trainIter);
+        network.fit(dataIter,epochs);
 
         // Train with transformations
-        for (ImageTransform transform : transforms) {
-            System.out.print("\nTraining on transformation: " + transform.getClass().toString() + "\n\n");
-            recordReader.initialize(trainData, transform);
-            dataIter = new RecordReaderDataSetIterator(recordReader, batchSize, 1, numLabels);
-            scaler.fit(dataIter);
-            dataIter.setPreProcessor(scaler);
-            trainIter = new MultipleEpochsIterator(epochs, dataIter);
-            network.fit(trainIter);
-        }
+        recordReader.initialize(trainData,transform);
+        dataIter = new RecordReaderDataSetIterator(recordReader, batchSize, 1, numLabels);
+        scaler.fit(dataIter);
+        dataIter.setPreProcessor(scaler);
+        network.fit(dataIter,epochs);
 
         log.info("Evaluate model....");
         recordReader.initialize(testData);
@@ -219,16 +188,6 @@ public class SecondExample {
             ModelSerializer.writeModel(network, basePath + "model.bin", true);
         }
         log.info("****************Example finished********************");
-    }
-
-    private MultiLayerNetwork loadModel() {
-        String basePath = FilenameUtils.concat(System.getProperty("user.dir"), "src/main/resources/");
-
-        try {
-            return ModelSerializer.restoreMultiLayerNetwork(basePath + "model.bin");
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     private ConvolutionLayer convInit(String name, int in, int out, int[] kernel, int[] stride, int[] pad, double bias) {
@@ -258,11 +217,10 @@ public class SecondExample {
          **/
         MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
                 .seed(seed)
-                .l2(0.005) // tried 0.0001, 0.0005
+                .l2(0.005)
                 .activation(Activation.RELU)
-                .updater(new Adam(0.001))
                 .weightInit(WeightInit.XAVIER)
-                .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
+                .updater(new Nesterovs(0.0001,0.9))
                 .list()
                 .layer(0, convInit("cnn1", channels, 50 ,  new int[]{5, 5}, new int[]{1, 1}, new int[]{0, 0}, 0))
                 .layer(1, maxPool("maxpool1", new int[]{2,2}))
@@ -296,9 +254,9 @@ public class SecondExample {
                 .weightInit(WeightInit.DISTRIBUTION)
                 .dist(new NormalDistribution(0.0, 0.01))
                 .activation(Activation.RELU)
-                .updater(new Nesterovs(0.9))
+                .updater(new Nesterovs(new StepSchedule(ScheduleType.ITERATION, 1e-2, 0.1, 100000), 0.9))
+                .biasUpdater(new Nesterovs(new StepSchedule(ScheduleType.ITERATION, 2e-2, 0.1, 100000), 0.9))
                 .gradientNormalization(GradientNormalization.RenormalizeL2PerLayer) // normalize to prevent vanishing or exploding gradients
-                .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
                 .l2(5 * 1e-4)
                 .list()
                 .layer(0, convInit("cnn1", channels, 96, new int[]{11, 11}, new int[]{4, 4}, new int[]{3, 3}, 0))
@@ -323,12 +281,11 @@ public class SecondExample {
                 .setInputType(InputType.convolutional(height, width, channels))
                 .build();
 
-
         return new MultiLayerNetwork(conf);
 
     }
 
-    public MultiLayerNetwork customModel() {
+    public static MultiLayerNetwork customModel() {
         //Lambda defines the relative strength of the center loss component.
         //lambda = 0.0 is equivalent to training with standard softmax only
         double lambda = 1.0;
@@ -393,7 +350,7 @@ public class SecondExample {
     }
 
     public static void main(String[] args) throws Exception {
-        new SecondExample().run(args);
+        new AnimalsClassificationCustom().run(args);
     }
 
 }
