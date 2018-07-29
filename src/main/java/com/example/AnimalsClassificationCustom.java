@@ -79,7 +79,7 @@ public class AnimalsClassificationCustom {
          *  - pathFilter = define additional file load filter to limit size and balance batch content
          **/
         ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
-        File mainPath = new File("c:\\Users\\User\\face_large\\");
+        File mainPath = new File("c:\\Users\\User\\face_0_1");
         FileSplit fileSplit = new FileSplit(mainPath, NativeImageLoader.ALLOWED_FORMATS, rng);
         int numExamples = toIntExact(fileSplit.length());
         numLabels = fileSplit.getRootDir().listFiles(File::isDirectory).length; //This only works if your root is clean: only label subdirs.
@@ -299,7 +299,7 @@ public class AnimalsClassificationCustom {
                 .weightInit(WeightInit.XAVIER)
                 .gradientNormalization(GradientNormalization.RenormalizeL2PerLayer)
                 .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                .updater(new Adam(0.01))
+                .updater(new Adam(0.0001))
                 .list()
                 .layer(0, new ConvolutionLayer.Builder(4, 4)
                         .name("cnn1")
