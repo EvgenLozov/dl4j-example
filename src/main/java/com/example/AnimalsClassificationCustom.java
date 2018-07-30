@@ -31,17 +31,24 @@ import org.deeplearning4j.ui.api.UIServer;
 import org.deeplearning4j.ui.stats.StatsListener;
 import org.deeplearning4j.ui.storage.InMemoryStatsStorage;
 import org.deeplearning4j.util.ModelSerializer;
+import org.nd4j.jita.conf.CudaEnvironment;
 import org.nd4j.linalg.activations.Activation;
+import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.util.DataTypeUtil;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.dataset.api.preprocessor.DataNormalization;
 import org.nd4j.linalg.dataset.api.preprocessor.ImagePreProcessingScaler;
+import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.learning.config.Adam;
 import org.nd4j.linalg.learning.config.Nesterovs;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 import org.nd4j.linalg.primitives.Pair;
 import org.nd4j.linalg.schedule.ScheduleType;
 import org.nd4j.linalg.schedule.StepSchedule;
+import org.nd4j.nativeblas.NativeOps;
+import org.nd4j.nativeblas.NativeOpsHolder;
+import org.nd4j.nativeblas.Nd4jBlas;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,12 +63,12 @@ public class AnimalsClassificationCustom {
     protected static final Logger log = LoggerFactory.getLogger(AnimalsClassificationCustom.class);
     protected static int height = 100;
     protected static int width = 100;
-    protected static int channels = 3;
+    protected static int channels = 1;
     protected static int batchSize = 20;
 
     protected static long seed = 42;
     protected static Random rng = new Random(seed);
-    protected static int epochs = 50;
+    protected static int epochs = 1;
     protected static double splitTrainTest = 0.8;
     protected static boolean save = false;
     protected static int maxPathsPerLabel=18;
@@ -70,6 +77,16 @@ public class AnimalsClassificationCustom {
     private static int numLabels;
 
     public void run(String[] args) throws Exception {
+        Util.filesCount("/home/yevhen/Downloads/face_detection_data");
+
+        log.info("Start....");
+
+        Nd4jBlas nd4jBlas = (Nd4jBlas) Nd4j.factory().blas();
+        nd4jBlas.setMaxThreads(8);
+
+        NativeOpsHolder instance = NativeOpsHolder.getInstance();
+        NativeOps deviceNativeOps = instance.getDeviceNativeOps();
+        deviceNativeOps.setOmpNumThreads(8);
 
         log.info("Load data....");
         /**cd
@@ -79,10 +96,11 @@ public class AnimalsClassificationCustom {
          *  - pathFilter = define additional file load filter to limit size and balance batch content
          **/
         ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
-        File mainPath = new File("c:\\Users\\User\\face_0_1");
+        File mainPath = new File("/home/yevhen/Downloads/face_detection_data");
+
         FileSplit fileSplit = new FileSplit(mainPath, NativeImageLoader.ALLOWED_FORMATS, rng);
         int numExamples = toIntExact(fileSplit.length());
-        numLabels = fileSplit.getRootDir().listFiles(File::isDirectory).length; //This only works if your root is clean: only label subdirs.
+        numLabels = fileSplit.getRootDir().listFiles(f -> f.isDirectory() && f.listFiles().length > 0).length; //This only works if your root is clean: only label subdirs.
         BalancedPathFilter pathFilter = new BalancedPathFilter(rng, labelMaker, numExamples, numLabels, maxPathsPerLabel);
 
         /**
@@ -106,6 +124,8 @@ public class AnimalsClassificationCustom {
                 new Pair<>(warpTransform,0.5));
 
         ImageTransform transform = new PipelineImageTransform(pipeline,shuffle);
+
+
         /**
          * Data Setup -> normalization
          *  - how to normalize images and generate large dataset to train on
@@ -143,6 +163,12 @@ public class AnimalsClassificationCustom {
          *  - dataIter = a generator that only loads one batch at a time into memory to save memory
          *  - trainIter = uses MultipleEpochsIterator to ensure model runs through the data for all epochs
          **/
+
+        log.info("Train model with custom iterator....");
+
+        network.fit(new FaceImageIteratorProvider(batchSize).get(),epochs);
+
+
         ImageRecordReader recordReader = new ImageRecoderReaderFixed(height, width, channels, labelMaker);
         recordReader.setLabels(Arrays.asList(mainPath.list()));
 

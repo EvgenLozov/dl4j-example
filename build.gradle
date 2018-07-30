@@ -35,7 +35,7 @@ dependencies {
         compile group: 'org.nd4j', name: 'nd4j-cuda-9.1-platform', version: '1.0.0-beta'
     compile group: 'org.datavec', name: 'datavec-api', version: '1.0.0-beta'
     compile group: 'org.deeplearning4j', name: 'deeplearning4j-parallel-wrapper_2.11', version: '1.0.0-beta'
-    compile group: 'org.deeplearning4j', name: 'deeplearning4j-cuda-9.1', version: '1.0.0-beta'
+//    compile group: 'org.deeplearning4j', name: 'deeplearning4j-cuda-9.1', version: '1.0.0-beta'
 
 
 

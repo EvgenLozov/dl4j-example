@@ -77,17 +77,6 @@ public class SecondExample {
 
 
     public void run(String[] args) throws Exception {
-        DataTypeUtil.setDTypeForContext(DataBuffer.Type.HALF);
-        CudaEnvironment.getInstance().getConfiguration()
-                .setMaximumGridSize(2048)
-                .setMaximumBlockSize(512);
-
-        CudaEnvironment.getInstance().getConfiguration()
-                .setMaximumDeviceCacheableLength(1024 * 1024 * 1024L)
-                .setMaximumDeviceCache(6L * 1024 * 1024 * 1024L)
-                .setMaximumHostCacheableLength(1024 * 1024 * 1024L)
-                .setMaximumHostCache(6L * 1024 * 1024 * 1024L);
-
 
         log.info("Load data....");
         /**cd
@@ -98,7 +87,7 @@ public class SecondExample {
          **/
         ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
 //        File mainPath = new File(System.getProperty("user.dir"), "src/main/resources/animals/");
-        File mainPath = new File("c:\\Users\\User\\face_large");
+        File mainPath = new File("/home/yevhen/Downloads/face_detection_data");
         FileSplit fileSplit = new FileSplit(mainPath, NativeImageLoader.ALLOWED_FORMATS, rng);
         int numExamples = toIntExact(fileSplit.length());
         numLabels = fileSplit.getRootDir().listFiles(file -> file.isDirectory() && file.list().length > 0).length; //This only works if your root is clean: only label subdirs.
