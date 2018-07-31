@@ -68,7 +68,7 @@ public class AnimalsClassificationCustom {
 
     protected static long seed = 42;
     protected static Random rng = new Random(seed);
-    protected static int epochs = 1;
+    protected static int epochs = 20;
     protected static double splitTrainTest = 0.8;
     protected static boolean save = false;
     protected static int maxPathsPerLabel=18;
@@ -77,8 +77,6 @@ public class AnimalsClassificationCustom {
     private static int numLabels;
 
     public void run(String[] args) throws Exception {
-        Util.filesCount("/home/yevhen/Downloads/face_detection_data");
-
         log.info("Start....");
 
         Nd4jBlas nd4jBlas = (Nd4jBlas) Nd4j.factory().blas();
@@ -95,8 +93,9 @@ public class AnimalsClassificationCustom {
          *  - fileSplit = define basic dataset split with limits on format
          *  - pathFilter = define additional file load filter to limit size and balance batch content
          **/
+        String faceFolder = "c:\\Users\\User\\face_large\\";
         ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
-        File mainPath = new File("/home/yevhen/Downloads/face_detection_data");
+        File mainPath = new File(faceFolder);
 
         FileSplit fileSplit = new FileSplit(mainPath, NativeImageLoader.ALLOWED_FORMATS, rng);
         int numExamples = toIntExact(fileSplit.length());
@@ -166,7 +165,9 @@ public class AnimalsClassificationCustom {
 
         log.info("Train model with custom iterator....");
 
-        network.fit(new FaceImageIteratorProvider(batchSize).get(),epochs);
+        network.fit(new FaceImageIteratorProvider(faceFolder, batchSize).get(),epochs);
+        ModelSerializer.writeModel(network, new File("face_net.bin"), true);
+
 
 
         ImageRecordReader recordReader = new ImageRecoderReaderFixed(height, width, channels, labelMaker);
@@ -314,10 +315,10 @@ public class AnimalsClassificationCustom {
     public static MultiLayerNetwork customModel() {
         //Lambda defines the relative strength of the center loss component.
         //lambda = 0.0 is equivalent to training with standard softmax only
-        double lambda = 1.0;
+        double lambda = 0.5;
 
         //Alpha can be thought of as the learning rate for the centers for each class
-        double alpha = 0.1;
+        double alpha = 0.01;
 
         MultiLayerConfiguration.Builder builder = new NeuralNetConfiguration.Builder()
                 .seed(seed)
@@ -325,7 +326,7 @@ public class AnimalsClassificationCustom {
                 .weightInit(WeightInit.XAVIER)
                 .gradientNormalization(GradientNormalization.RenormalizeL2PerLayer)
                 .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                .updater(new Adam(0.0001))
+                .updater(new Adam(0.001))
                 .list()
                 .layer(0, new ConvolutionLayer.Builder(4, 4)
                         .name("cnn1")

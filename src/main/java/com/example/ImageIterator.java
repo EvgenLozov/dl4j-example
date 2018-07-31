@@ -9,6 +9,7 @@ import org.nd4j.linalg.factory.Nd4j;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
@@ -51,5 +52,11 @@ public class ImageIterator implements Iterator<DataSet> {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public void reset(){
+        cursor = 0;
+        Collections.shuffle(images);
+
     }
 }

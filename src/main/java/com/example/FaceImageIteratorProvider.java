@@ -12,19 +12,21 @@ import java.util.stream.Collectors;
 public class FaceImageIteratorProvider {
 
     private NativeImageLoader imageLoader = new NativeImageLoader(100, 100);
-    private String faceImagesDir = "/home/yevhen/Downloads/face_detection_data";
 
+    private String faceImagesDir;
     private int batchSize;
 
-    public FaceImageIteratorProvider(int batchSize) {
+    public FaceImageIteratorProvider(String faceImagesDir, int batchSize) {
+        this.faceImagesDir = faceImagesDir;
         this.batchSize = batchSize;
     }
 
-    public DataSetIterator get(){
+    public FaceDataSetIteratorWithReset get(){
 
          List<String> faces = Arrays.stream(new File(faceImagesDir).listFiles()).flatMap(f -> Arrays.stream(f.listFiles()))
                  .filter(f -> f.isFile())
                  .map(f -> f.getAbsolutePath())
+                 .filter(f -> f.matches(".*jpg"))
                  .collect(Collectors.toList());
 
         Collections.shuffle(faces);
@@ -34,8 +36,8 @@ public class FaceImageIteratorProvider {
                  .distinct()
                  .collect(Collectors.toList());
 
-         Iterator<DataSet> iterator = new ImageIterator(faces, imageLoader, labels);
+        ImageIterator iterator = new ImageIterator(faces, imageLoader, labels);
 
-         return new IteratorDataSetIterator(iterator, batchSize);
+         return new FaceDataSetIteratorWithReset(iterator, batchSize);
      }
 }

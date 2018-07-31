@@ -78,6 +78,17 @@ public class SecondExample {
 
     public void run(String[] args) throws Exception {
 
+        DataTypeUtil.setDTypeForContext(DataBuffer.Type.HALF);
+        CudaEnvironment.getInstance().getConfiguration()
+                .setMaximumGridSize(2048)
+                .setMaximumBlockSize(512);
+
+        CudaEnvironment.getInstance().getConfiguration()
+                .setMaximumDeviceCacheableLength(1024 * 1024 * 1024L)
+                .setMaximumDeviceCache(6L * 1024 * 1024 * 1024L)
+                .setMaximumHostCacheableLength(1024 * 1024 * 1024L)
+                .setMaximumHostCache(6L * 1024 * 1024 * 1024L);
+
         log.info("Load data....");
         /**cd
          * Data Setup -> organize and limit data file paths:
@@ -331,7 +342,7 @@ public class SecondExample {
                 .weightInit(WeightInit.XAVIER)
                 .gradientNormalization(GradientNormalization.RenormalizeL2PerLayer)
                 .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                .updater(new Adam(0.01))
+                .updater(new Adam(0.0001))
                 .list()
                 .layer(0, new ConvolutionLayer.Builder(4, 4)
                         .name("cnn1")
